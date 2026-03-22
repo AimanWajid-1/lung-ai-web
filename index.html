@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LungScan AI | Diagnostics</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Inter', -apple-system, sans-serif; background: #f3f4f6; margin: 0; display: flex; flex-direction: column; height: 100vh; color: #1f2937; }
+        
+        /* Header */
+        header { background: #ffffff; padding: 15px 20px; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; gap: 10px; }
+        .logo { width: 32px; height: 32px; background: #2563eb; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; }
+        header h1 { font-size: 18px; margin: 0; }
+
+        /* Chat Area */
+        #chatbox {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            max-width: 900px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* Message Bubbles */
+        .msg { padding: 12px 18px; border-radius: 18px; max-width: 80%; font-size: 15px; line-height: 1.5; position: relative; }
+        .user { align-self: flex-end; background: #2563eb; color: white; border-bottom-right-radius: 4px; }
+        .ai { align-self: flex-start; background: #ffffff; color: #1f2937; border-bottom-left-radius: 4px; border: 1px solid #e5e7eb; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        
+        /* Image Preview in Chat */
+        .chat-img { max-width: 250px; border-radius: 10px; margin-bottom: 5px; display: block; border: 2px solid #fff; }
+        .prediction-badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-weight: bold; margin-top: 5px; background: #dbeafe; color: #1e40af; }
+
+        /* Bottom Control Bar */
+        #input-container { background: white; border-top: 1px solid #e5e7eb; padding: 15px 20px; }
+        .input-wrapper { max-width: 900px; margin: 0 auto; display: flex; align-items: center; gap: 12px; }
+        
+        /* Custom Upload Button */
+        .file-label {
+            background: #f3f4f6;
+            padding: 10px 15px;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .file-label:hover { background: #e5e7eb; }
+        #imageInput { display: none; }
+
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.1s, opacity 0.2s;
+        }
+        button:hover { opacity: 0.9; }
+        button:active { transform: scale(0.98); }
+        button:disabled { background: #94a3b8; cursor: not-allowed; }
+
+        #status { font-size: 12px; color: #6b7280; text-align: center; margin-bottom: 8px; font-weight: 500; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">L</div>
+        <h1>LungScan AI <small style="font-weight: normal; color: #6b7280;">Assistant</small></h1>
+    </header>
+
+    <div id="chatbox">
+        <div class="msg ai">
+            Hello! I am your AI diagnostic assistant. Please upload a chest X-ray image (.png, .jpg) to begin the analysis.
+        </div>
+    </div>
+
+    <div id="input-container">
+        <div id="status" style="display:none">Analyzing X-Ray...</div>
+        <div class="input-wrapper">
+            <label for="imageInput" class="file-label">
+                <span>📎 Upload X-Ray</span>
+                <input type="file" id="imageInput" accept="image/*" onchange="handleFileSelect()">
+            </label>
+            <div id="fileName" style="font-size: 13px; color: #6b7280; flex: 1;">No file selected</div>
+            <button id="sendBtn" onclick="sendPrediction()" disabled>Run Diagnosis</button>
+        </div>
+    </div>
+
+    <script>
+        // Point this to your local FastAPI server
+        const API_URL = "https://ayanrevenant-lung-xray-ai.hf.space/predict";
+
+        function handleFileSelect() {
+            const input = document.getElementById("imageInput");
+            const btn = document.getElementById("sendBtn");
+            const nameDisplay = document.getElementById("fileName");
+
+            if (input.files && input.files[0]) {
+                nameDisplay.innerText = input.files[0].name;
+                btn.disabled = false;
+            }
+        }
+
+        async function sendPrediction() {
+    const input = document.getElementById("imageInput");
+    const chatbox = document.getElementById("chatbox");
+    const btn = document.getElementById("sendBtn");
+    const status = document.getElementById("status");
+
+    const file = input.files[0];
+    if (!file) return;
+
+    // Show image preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        chatbox.innerHTML += `<div class="msg user"><img src="${e.target.result}" class="chat-img">Sent X-ray for analysis.</div>`;
+        chatbox.scrollTop = chatbox.scrollHeight;
+    };
+    reader.readAsDataURL(file);
+
+    btn.disabled = true;
+    status.style.display = "block";
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+
+        // Check if data actually has what we need
+        if (data.error) {
+            chatbox.innerHTML += `<div class="msg ai" style="color:#b91c1c">⚠️ ${data.error}</div>`;
+        } else if (data.prediction && data.confidence !== undefined) {
+            chatbox.innerHTML += `
+                <div class="msg ai">
+                    <strong>Analysis Complete:</strong><br>
+                    <span class="prediction-badge">${data.prediction}</span><br>
+                    Confidence: ${data.confidence}%<br>
+                    <small style="color:#6b7280; display:block; margin-top:10px;"><i>${data.note || ''}</i></small>
+                </div>`;
+        } else {
+            chatbox.innerHTML += `<div class="msg ai">⚠️ Received unexpected data format from server.</div>`;
+        }
+    } catch (e) {
+        chatbox.innerHTML += `<div class="msg ai" style="color:#b91c1c"><strong>Error:</strong> Could not connect to the AI. Check your internet or API URL.</div>`;
+    } finally {
+        btn.disabled = false;
+        status.style.display = "none";
+        input.value = ""; 
+        document.getElementById("fileName").innerText = "No file selected";
+        chatbox.scrollTop = chatbox.scrollHeight;
+    }
+}
+    </script>
+</body>
+</html>
